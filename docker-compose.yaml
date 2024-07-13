@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  prometheus_exporter:
+    container_name: meshprom
+    build: ./exporter
+    restart: unless-stopped
+    volumes:
+      - /home/mate/docker/meshprom/data.json:/app/data.json
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+
