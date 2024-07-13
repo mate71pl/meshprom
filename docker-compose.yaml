@@ -6,7 +6,8 @@ services:
     build: ./exporter
     restart: unless-stopped
     volumes:
-      - /home/mate/docker/meshprom/data.json:/app/data.json
+      - $HOME/docker/meshprom/data.json:/app/data.json
+      - $HOME/docker/meshprom/prom_exporter.py:/app/prom_exporter.py  
     ports:
       - "8000:8000"
     environment:
