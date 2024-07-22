@@ -3,7 +3,7 @@ from prometheus_client import start_http_server, Gauge
 import time
 
 # Define whether to delete old nodes
-deleteOldNode = True  # Set to True or False
+DelOldNode = True  # Set to True or False
 
 # Define metrics
 battery_level = Gauge('battery_level', 'Battery level', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
@@ -29,8 +29,8 @@ def update_metrics(data):
         metrics = device_data.get('deviceMetrics', {})
         position = device_data.get('position', {})
 
-        last_heard_time = device_data.get('lastHeard', 0)
-        if deleteOldNode and (current_time - last_heard_time > fifteen_minutes):
+        last_heard_time = device_data.get('lastHeard', 0) #/ 1000 # Convert milliseconds to seconds
+        if DelOldNode and (current_time - last_heard_time > fifteen_minutes):
             continue
 
         labels = {
