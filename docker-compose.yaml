@@ -1,29 +1,40 @@
 version: '3.8'
 
 services:
-  meshprom_exporter:
-    container_name: meshprom
-    build: .
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - $HOME/docker/meshprom/data.json:/app/data.json
-      - $HOME/docker/meshprom/prom_exporter.py:/app/prom_exporter.py  
-    ports:
-      - "8000:8000"
-    environment:
-      - PYTHONUNBUFFERED=1
-
   mmrelaydevicestat:
     build: device
     image: mmrelaynode:latest
     container_name: node-device-stats
     restart: unless-stopped
     volumes:
-      - node_stats:/home/mesh
+      - ./prom_exporter.py:/app/prom_exporter.py
+      - ./config.yaml:/home/mesh/config.yaml
+      - mesh:/home/mesh/
     ports:
       - "4403:4403"
-    entrypoint: ["sh", "-c", "/home/mesh/mesh --hwid 34b7"]
+    networks:
+      - mesh
+    entrypoint: ["sh", "-c", "meshtasticd -c /home/mesh/config.yaml --hwid=34b7"]
+
+  meshprom_exporter:
+    container_name: meshprom
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - mmrelaydevicestat
+    volumes:
+      - mesh:/home/mesh
+    networks:
+      - mesh
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+
+networks:
+  mesh:
+    driver: bridge
 
 volumes:
-  node_stats:
+  mesh:
+

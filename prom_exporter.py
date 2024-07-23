@@ -1,92 +1,146 @@
 import json
 from prometheus_client import start_http_server, Gauge
 import time
+import logging
+import subprocess
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Define whether to delete old nodes
 DelOldNode = True  # Set to True or False
 
-# Define metrics
-battery_level = Gauge('battery_level', 'Battery level', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-voltage = Gauge('voltage', 'Voltage', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-channel_utilization = Gauge('channel_utilization', 'Channel utilization', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-air_util_tx = Gauge('air_util_tx', 'Air utilization Tx', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-uptime_seconds = Gauge('uptime_seconds', 'Uptime in seconds', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-snr = Gauge('snr', 'Signal to Noise Ratio', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-last_heard = Gauge('last_heard', 'Last Heard', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-latitude = Gauge('latitude', 'Latitude', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-longitude = Gauge('longitude', 'Longitude', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-altitude = Gauge('altitude', 'Altitude', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-hops_away = Gauge('hops_away', 'Hops Away', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-via_mqtt = Gauge('via_mqtt', 'Via MQTT', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
-is_licensed = Gauge('is_licensed', 'Is Licensed', ['device_id', 'long_name', 'short_name', 'macaddr', 'hw_model'])
+# Define timeout for ignoring old nodes (in minutes)
+node_timeout_minutes = 15  # Set to desired number of minutes
+node_timeout_seconds = node_timeout_minutes * 60
+
+# Define metrics with the correct label order
+metrics = {
+    'battery_level': Gauge('battery_level', 'Battery level', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'voltage': Gauge('voltage', 'Voltage', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'channel_utilization': Gauge('channel_utilization', 'Channel utilization', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'air_util_tx': Gauge('air_util_tx', 'Air utilization Tx', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'uptime_seconds': Gauge('uptime_seconds', 'Uptime in seconds', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'snr': Gauge('snr', 'Signal to Noise Ratio', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'last_heard': Gauge('last_heard', 'Last Heard', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'latitude': Gauge('latitude', 'Latitude', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'longitude': Gauge('longitude', 'Longitude', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'altitude': Gauge('altitude', 'Altitude', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'hops_away': Gauge('hops_away', 'Hops Away', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'via_mqtt': Gauge('via_mqtt', 'Via MQTT', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr']),
+    'is_licensed': Gauge('is_licensed', 'Is Licensed', ['device_id', 'long_name', 'short_name', 'hw_model', 'macaddr'])
+}
+
+def get_meshtastic_data():
+    try:
+        result = subprocess.run(
+            ["meshtastic", "--host", "node-device-stats", "--info"],
+            capture_output=True, text=True, check=True
+        )
+        output = result.stdout
+        nodes_data = extract_nodes_data(output)
+        return nodes_data
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error executing meshtastic command: {e}")
+        return None
+
+def extract_nodes_data(output):
+    start_marker = "Nodes in mesh:"
+    end_marker = "Preferences:"
+
+    try:
+        start_index = output.index(start_marker) + len(start_marker)
+        end_index = output.index(end_marker)
+        nodes_section = output[start_index:end_index].strip()
+        
+        # Remove leading and trailing braces and fix formatting
+        nodes_section = nodes_section.strip('{}').strip()
+        if nodes_section.endswith(','):
+            nodes_section = nodes_section[:-1]
+        
+        nodes_section = '{' + nodes_section + '}'
+        
+        return json.loads(nodes_section)
+    except (ValueError, json.JSONDecodeError) as e:
+        logging.error(f"Error parsing nodes data: {e}")
+        logging.debug(f"Nodes data content: {nodes_section}")
+        return None
+
+def clear_old_metrics(labels):
+    for metric in metrics.values():
+        try:
+            metric.remove(*labels.values())
+        except KeyError:
+            pass
 
 def update_metrics(data):
     current_time = time.time()
-    fifteen_minutes = 15 * 60
 
     for device_id, device_data in data.items():
         user = device_data.get('user', {})
-        metrics = device_data.get('deviceMetrics', {})
+        metrics_data = device_data.get('deviceMetrics', {})
         position = device_data.get('position', {})
 
-        last_heard_time = device_data.get('lastHeard', 0) #/ 1000 # Convert milliseconds to seconds
-        if DelOldNode and (current_time - last_heard_time > fifteen_minutes):
+        last_heard_time = device_data.get('lastHeard', None)
+        if last_heard_time is None or (DelOldNode and (current_time - last_heard_time > node_timeout_seconds)):
+            labels = {
+                'device_id': device_id,
+                'long_name': user.get('longName', ''),
+                'short_name': user.get('shortName', ''),
+                'hw_model': user.get('hwModel', ''),
+                'macaddr': user.get('macaddr', '')
+            }
+            clear_old_metrics(labels)
             continue
 
         labels = {
             'device_id': device_id,
             'long_name': user.get('longName', ''),
             'short_name': user.get('shortName', ''),
-            'macaddr': user.get('macaddr', ''),
-            'hw_model': user.get('hwModel', '')
+            'hw_model': user.get('hwModel', ''),
+            'macaddr': user.get('macaddr', '')
         }
 
-        if 'batteryLevel' in metrics:
-            battery_level.labels(**labels).set(float(metrics['batteryLevel']))
-        if 'voltage' in metrics:
-            voltage.labels(**labels).set(float(metrics['voltage']))
-        if 'channelUtilization' in metrics:
-            channel_utilization.labels(**labels).set(float(metrics['channelUtilization']))
-        if 'airUtilTx' in metrics:
-            air_util_tx.labels(**labels).set(float(metrics['airUtilTx']))
-        if 'uptimeSeconds' in metrics:
-            uptime_seconds.labels(**labels).set(float(metrics['uptimeSeconds']))
+        logging.info(f"Updating metrics for device: {device_id}")
+
+        # Update gauges with available metrics
+        if 'batteryLevel' in metrics_data:
+            metrics['battery_level'].labels(**labels).set(metrics_data['batteryLevel'])
+        if 'voltage' in metrics_data:
+            metrics['voltage'].labels(**labels).set(metrics_data['voltage'])
+        if 'channelUtilization' in metrics_data:
+            metrics['channel_utilization'].labels(**labels).set(metrics_data['channelUtilization'])
+        if 'airUtilTx' in metrics_data:
+            metrics['air_util_tx'].labels(**labels).set(metrics_data['airUtilTx'])
+        if 'uptimeSeconds' in metrics_data:
+            metrics['uptime_seconds'].labels(**labels).set(metrics_data['uptimeSeconds'])
         if 'snr' in device_data:
-            snr.labels(**labels).set(float(device_data['snr']))
+            metrics['snr'].labels(**labels).set(device_data['snr'])
         if 'lastHeard' in device_data:
-            last_heard.labels(**labels).set(float(device_data['lastHeard']))
+            metrics['last_heard'].labels(**labels).set(device_data['lastHeard'])
         if 'latitude' in position:
-            latitude.labels(**labels).set(float(position.get('latitude', 0)))
+            metrics['latitude'].labels(**labels).set(position['latitude'])
         if 'longitude' in position:
-            longitude.labels(**labels).set(float(position.get('longitude', 0)))
+            metrics['longitude'].labels(**labels).set(position['longitude'])
         if 'altitude' in position:
-            altitude.labels(**labels).set(float(position.get('altitude', 0)))
+            metrics['altitude'].labels(**labels).set(position['altitude'])
         if 'hopsAway' in device_data:
-            hops_away.labels(**labels).set(float(device_data['hopsAway']))
+            metrics['hops_away'].labels(**labels).set(device_data['hopsAway'])
         if 'viaMqtt' in device_data:
-            via_mqtt.labels(**labels).set(1.0 if device_data['viaMqtt'] else 0.0)
+            metrics['via_mqtt'].labels(**labels).set(1.0 if device_data['viaMqtt'] else 0.0)
         if 'isLicensed' in user:
-            is_licensed.labels(**labels).set(1.0 if user['isLicensed'] else 0.0)
+            metrics['is_licensed'].labels(**labels).set(1.0 if user['isLicensed'] else 0.0)
 
 if __name__ == '__main__':
     # Start HTTP server
     start_http_server(8000, addr="0.0.0.0")
     
     while True:
-        try:
-            # Read data from JSON file
-            with open('/app/data.json', 'r') as file:
-                data = file.read().strip()
-                if data:
-                    data = json.loads(data)
-                    # Update metrics
-                    update_metrics(data)
-                else:
-                    print("JSON file is empty.")
-        except FileNotFoundError:
-            print("JSON file does not exist.")
-        except json.JSONDecodeError as e:
-            print(f"JSON decode error: {e}")
+        data = get_meshtastic_data()
+        if data:
+            update_metrics(data)
+        else:
+            logging.warning("Failed to get data from Meshtastic")
         
         # Wait 60 seconds before the next update
         time.sleep(60)
