@@ -2,34 +2,35 @@ version: '3.8'
 
 services:
   mmrelaydevicestat:
-    build: device
-    image: mmrelaynode:latest
+    #    build: device
+    image: mate71pl/mmrelaynode:latest
     container_name: node-device-stats
     restart: unless-stopped
     volumes:
-      - ./prom_exporter.py:/app/prom_exporter.py
-      - ./config.yaml:/home/mesh/config.yaml
       - mesh:/home/mesh/
+      - $HOME/docker/meshprom/config.yaml:/home/mesh/config.yaml
     ports:
       - "4403:4403"
     networks:
       - mesh
-    entrypoint: ["sh", "-c", "meshtasticd -c /home/mesh/config.yaml --hwid=34b7"]
+    entrypoint: ["sh", "-c", "meshtasticd -d /home/mesh -h 12345678"]
 
   meshprom_exporter:
     container_name: meshprom
     build: .
     restart: unless-stopped
     depends_on:
-      - mmrelaydevicestat
+     - mmrelaydevicestat
     volumes:
-      - mesh:/home/mesh
+     - mesh:/home/mesh
+     - $HOME/docker/meshprom/prom_exporter.py:/app/prom_exporter.py
     networks:
-      - mesh
+     - mesh
     ports:
-      - "8000:8000"
+     - "8000:8000"
+    command: ["python", "/app/prom_exporter.py"]
     environment:
-      - PYTHONUNBUFFERED=1
+     - PYTHONUNBUFFERED=1
 
 networks:
   mesh:
