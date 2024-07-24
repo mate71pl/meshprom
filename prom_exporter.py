@@ -6,10 +6,9 @@ import subprocess
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Define whether to delete old nodes
-DelOldNode = True  # Set to True or False
-
+ 
+IgnoreNodesWithoutMAC = True 
+DelOldNode = True 
 # Define timeout for ignoring old nodes (in minutes)
 node_timeout_minutes = 15  # Set to desired number of minutes
 node_timeout_seconds = node_timeout_minutes * 60
@@ -80,6 +79,10 @@ def update_metrics(data):
         user = device_data.get('user', {})
         metrics_data = device_data.get('deviceMetrics', {})
         position = device_data.get('position', {})
+
+        # Skip nodes without a MAC address if IgnoreNodesWithoutMAC is set to True
+        if IgnoreNodesWithoutMAC and not user.get('macaddr'):
+            continue
 
         last_heard_time = device_data.get('lastHeard', None)
         if last_heard_time is None or (DelOldNode and (current_time - last_heard_time > node_timeout_seconds)):
