@@ -9,11 +9,15 @@ services:
     volumes:
       - mesh:/home/mesh/
       - $HOME/docker/meshprom/config.yaml:/home/mesh/config.yaml
-    ports:
-      - "4403:4403"
+  # ports:
+    # - "4403:4403"
     networks:
       - mesh
     entrypoint: ["sh", "-c", "meshtasticd -d /home/mesh -h 12345678"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
 
   meshprom_exporter:
     container_name: meshprom
@@ -31,6 +35,10 @@ services:
     command: ["python", "/app/prom_exporter.py"]
     environment:
      - PYTHONUNBUFFERED=1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
 
 networks:
   mesh:
