@@ -5,7 +5,7 @@ services:
     #    build: device
     image: mate71pl/mmrelaynode:latest
     container_name: node-device-stats
-    restart: unless-stopped
+    restart: always
     volumes:
       - mesh:/home/mesh/
       - $HOME/docker/meshprom/config.yaml:/home/mesh/config.yaml
@@ -22,7 +22,7 @@ services:
   meshprom_exporter:
     container_name: meshprom
     build: .
-    restart: unless-stopped
+    restart: always
     depends_on:
      - mmrelaydevicestat
     volumes:

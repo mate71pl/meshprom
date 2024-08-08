@@ -8,7 +8,7 @@ import signal
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-last_update_time = time.time()
+last_update_time = int(time.time())
  
 IgnoreNodesWithoutMAC = True 
 DelOldNode = True 
@@ -79,7 +79,7 @@ def clear_old_metrics(labels):
 
 def update_metrics(data):
     global last_update_time
-    current_time = time.time()
+    current_time = int(time.time())
 
     for device_id, device_data in data.items():
         user = device_data.get('user', {})
@@ -147,14 +147,14 @@ def update_metrics(data):
 
 def check_data_update():
     global last_update_time
-    current_time = time.time()
+    current_time = int(time.time())
     if current_time - last_update_time > update_interval_seconds:
         logging.error("Data update has stopped. Restarting the script.")
         os.kill(os.getpid(), signal.SIGTERM)
 
 if __name__ == '__main__':
     # Log the current time
-    current_time = time.time()
+    current_time = int(time.time())
     logging.info(f"Timestamp: {current_time}")
 
     # Write the initial update time to the file
