@@ -3,15 +3,20 @@ from prometheus_client import start_http_server, Gauge
 import time
 import logging
 import subprocess
+import os
+import signal
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+last_update_time = time.time()
  
 IgnoreNodesWithoutMAC = True 
 DelOldNode = True 
+update_interval_seconds = 300  # 5 minutes
 # Define timeout for ignoring old nodes (in minutes)
 node_timeout_minutes = 15  # Set to desired number of minutes
 node_timeout_seconds = node_timeout_minutes * 60
+last_update_file = "/app/last_update_time.txt"
 
 # Define metrics with the correct label order
 metrics = {
@@ -73,6 +78,7 @@ def clear_old_metrics(labels):
             pass
 
 def update_metrics(data):
+    global last_update_time
     current_time = time.time()
 
     for device_id, device_data in data.items():
@@ -134,7 +140,27 @@ def update_metrics(data):
         if 'isLicensed' in user:
             metrics['is_licensed'].labels(**labels).set(1.0 if user['isLicensed'] else 0.0)
 
+    last_update_time = current_time
+    # Write the last update time to a file
+    with open(last_update_file, 'w') as f:
+        f.write(str(last_update_time))
+
+def check_data_update():
+    global last_update_time
+    current_time = time.time()
+    if current_time - last_update_time > update_interval_seconds:
+        logging.error("Data update has stopped. Restarting the script.")
+        os.kill(os.getpid(), signal.SIGTERM)
+
 if __name__ == '__main__':
+    # Log the current time
+    current_time = time.time()
+    logging.info(f"Timestamp: {current_time}")
+
+    # Write the initial update time to the file
+    with open(last_update_file, 'w') as f:
+        f.write(str(current_time))
+
     # Start HTTP server
     start_http_server(8000, addr="0.0.0.0")
     
@@ -144,6 +170,8 @@ if __name__ == '__main__':
             update_metrics(data)
         else:
             logging.warning("Failed to get data from Meshtastic")
+
+        check_data_update()
         
         # Wait 60 seconds before the next update
         time.sleep(60)
