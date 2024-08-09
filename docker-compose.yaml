@@ -8,7 +8,6 @@ services:
     restart: always
     volumes:
       - mesh:/home/mesh/
-      - $HOME/docker/meshprom/config.yaml:/home/mesh/config.yaml
   # ports:
     # - "4403:4403"
     networks:
