@@ -18,3 +18,14 @@ To communicate with the node inside the container without exposing the API exter
 ```
 docker exec meshprom meshtastic --host node-device-stats --export-config
 ```
+
+Example Prometheus configuration:
+```
+scrape_configs:
+  - job_name: 'node-exporter'
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['10.0.0.69:8000']
+        labels:
+          server: 'meshtastic-info'
+```
