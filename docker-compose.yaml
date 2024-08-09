@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   mmrelaydevicestat:
-    #    build: device
-    image: mate71pl/mmrelaynode:latest
+    build: device
+    # image: mate71pl/mmrelaynode:latest
     container_name: node-device-stats
     restart: always
     volumes:
@@ -13,7 +13,7 @@ services:
     # - "4403:4403"
     networks:
       - mesh
-    entrypoint: ["sh", "-c", "meshtasticd -d /home/mesh -h 12345678"]
+    entrypoint: ["sh", "-c", "meshtasticd -d /home/mesh -h 12345678"] # change Hardware ID 
     logging:
       driver: "json-file"
       options:
