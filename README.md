@@ -1,5 +1,5 @@
 # MESHPROM
-## A simple script for collecting information about Meshtastic nodes and presenting them in Prometheus Node-Exporter format.
+## A simple script for collecting information about [Meshtastic](https://meshtastic.org) nodes and presenting them in Prometheus Node-Exporter format.
 
 ## The script is in the testing phase!
 
